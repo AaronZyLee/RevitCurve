@@ -178,44 +178,26 @@ namespace createdianlan
             XYZ p_normal1 = new XYZ(normal1.X, normal1.Y, 0);
             XYZ p_normal2 = new XYZ(normal2.X, normal2.Y, 0);
 
-            /**
-            double sita1 = StartToEnd.AngleTo(p_normal1);
-            double sita2 = StartToEnd.AngleTo(p_normal2);
-            XYZ e1 = Math.Abs(((0.25 * StartToEnd).GetLength() * Math.Cos(sita1) / p_normal1.GetLength())) * p_normal1;
-            XYZ e2 = Math.Abs(((0.25 * StartToEnd).GetLength() * Math.Cos(sita2) / p_normal2.GetLength())) * p_normal2;
-            
-
-            XYZ prePt1 = new XYZ(startPoint.X + e1.X, startPoint.Y + e1.Y, 0);
-            XYZ prePt2 = new XYZ(endPoint.X + e2.X, endPoint.Y + e2.Y, 0);
-             */
             p_normal1 = p_normal1 / (Math.Sqrt(p_normal1.X * p_normal1.X + p_normal1.Y * p_normal1.Y));
-            p_normal2 = p_normal2 / (Math.Sqrt(p_normal2.X * p_normal2.X + p_normal2.Y * p_normal2.Y));     
+            p_normal2 = p_normal2 / (Math.Sqrt(p_normal2.X * p_normal2.X + p_normal2.Y * p_normal2.Y));
 
 
-            //在起点、终点间插值，绘制NurbSpline曲线
+            XYZ XoYprj_start = new XYZ(startPoint.X, startPoint.Y, 0);
+            XYZ XoYprj_end = new XYZ(endPoint.X, endPoint.Y, 0);
+            //在起点、终点间插值，并在z=0平面上绘制NurbSpline曲线
             double[] doubleArray = { 1, 1, 1, 1,1,1};
             IList<XYZ> controlPoints2 = new List<XYZ>();
-
-            /**
-            controlPoints2.Insert(0, new XYZ(startPoint.X, startPoint.Y, 0));
-            controlPoints2.Insert(1, prePt1);
-            //controlPoints2.Insert(2, new XYZ((startPoint.X + endPoint.X) / 2, (startPoint.Y + endPoint.Y) / 2, 0));
-            controlPoints2.Insert(2, prePt2);
-            controlPoints2.Insert(3, new XYZ(endPoint.X, endPoint.Y, 0));
-            */
-
-            controlPoints2.Add(startPoint);
-            controlPoints2.Add(startPoint + p_normal1 * mmToFeet(2000));
-            controlPoints2.Add(startPoint + p_normal1 * mmToFeet(4000));
-            controlPoints2.Add(endPoint + p_normal2 * mmToFeet(4000));
-            controlPoints2.Add(endPoint + p_normal2 * mmToFeet(2000));
-            controlPoints2.Add(endPoint); 
+            controlPoints2.Add(XoYprj_start);
+            controlPoints2.Add(XoYprj_start + p_normal1 * mmToFeet(2000));
+            controlPoints2.Add(XoYprj_start + p_normal1 * mmToFeet(4000));
+            controlPoints2.Add(XoYprj_end + p_normal2 * mmToFeet(4000));
+            controlPoints2.Add(XoYprj_end + p_normal2 * mmToFeet(2000));
+            controlPoints2.Add(XoYprj_end); 
 
             Curve nbLine = NurbSpline.Create(controlPoints2, doubleArray);
 
 
-
-            //提取曲线上的拟合点
+            //提取曲线上的拟合点，并在z轴方向插值拟合原曲线
             IList<XYZ> ptsOnCurve = nbLine.Tessellate();
             
             int ptCount = ptsOnCurve.Count;
