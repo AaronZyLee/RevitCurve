@@ -55,10 +55,21 @@ namespace createdianlan
             MakeNewCurve(well1, well2);
             trans.Commit();
 
-            string filename = "test24";
-            string path = "C:\\Users\\DELL\\Documents\\" + filename + ".rft";
-            if (!File.Exists(path))
-                massdoc.SaveAs(path);
+            int fileNum = 0;
+
+            string path;
+            while (true)
+            {
+                path = "C:\\Users\\DELL\\Documents\\test" + fileNum.ToString() + ".rft";
+                if (!File.Exists(path))
+                {
+                    massdoc.SaveAs(path);
+                    break;
+                }
+                fileNum++;
+            }
+
+            string filename = "test" + fileNum.ToString();
 
             //将电缆插入项目文件中
             trans = new Transaction(doc);
@@ -118,7 +129,44 @@ namespace createdianlan
 
         private void MakeNewCurve(FamilyInstance well1, FamilyInstance well2)
         {
-            CreateCurve(LocatePointOnFamilyInstance(well1, Direction.right), LocatePointOnFamilyInstance(well2, Direction.left), well1.HandOrientation, -well2.HandOrientation);
+            XYZ w1_left = LocatePointOnFamilyInstance(well1, Direction.left);
+            XYZ w1_right = LocatePointOnFamilyInstance(well1, Direction.right);
+            XYZ w2_left = LocatePointOnFamilyInstance(well2, Direction.left);
+            XYZ w2_right = LocatePointOnFamilyInstance(well2, Direction.right);
+
+            IList<double> distances = new List<double>();
+            distances.Add(w1_left.DistanceTo(w2_left)); 
+            distances.Add(w1_left.DistanceTo(w2_right)); 
+            distances.Add(w1_right.DistanceTo(w2_left)); 
+            distances.Add(w1_right.DistanceTo(w2_right));
+
+            switch(findMinDistance(distances)){
+                case(0):
+                    CreateCurve(LocatePointOnFamilyInstance(well1, Direction.left), LocatePointOnFamilyInstance(well2, Direction.left), -well1.HandOrientation, -well2.HandOrientation);
+                    break;
+                case(1):
+                    CreateCurve(LocatePointOnFamilyInstance(well1, Direction.left), LocatePointOnFamilyInstance(well2, Direction.right), -well1.HandOrientation, well2.HandOrientation);
+                    break;
+                case(2):
+                    CreateCurve(LocatePointOnFamilyInstance(well1, Direction.right), LocatePointOnFamilyInstance(well2, Direction.left), well1.HandOrientation, -well2.HandOrientation);
+                    break;
+                case(3):
+                    CreateCurve(LocatePointOnFamilyInstance(well1, Direction.right), LocatePointOnFamilyInstance(well2, Direction.right), well1.HandOrientation, well2.HandOrientation);
+                    break;
+            }
+
+            //CreateCurve(LocatePointOnFamilyInstance(well1, Direction.right), LocatePointOnFamilyInstance(well2, Direction.left), well1.HandOrientation, -well2.HandOrientation);
+        }
+
+        private int findMinDistance(IList<double> distances)
+        {
+            double min = distances[0];
+            for(int i=1;i<distances.Count;i++){
+                if (distances[i] < min)
+                    min = distances[i];
+                }
+            return distances.IndexOf(min);        
+
         }
 
         #region Helper Function
@@ -184,14 +232,14 @@ namespace createdianlan
             curve.Visible = false;
 
             //创建放样平面并加入参照数组中
-            int step = 4;//取4分点进行拟合
+            int step = 8;//取8个点进行拟合
             ReferenceArrayArray refArr = new ReferenceArrayArray();
-            for (int i = 0; i < step; i++)
+            for (int i = 0; i <= step; i++)
             {
                 int position = i * (ptCount - 1) / step;
                 if (i == 0)
                     refArr.Append(CreatePlaneByPoint(ptArr.get_Item(position), normal1));
-                else if (i == ptArr.Size - 1)
+                else if (i == step)
                     refArr.Append(CreatePlaneByPoint(ptArr.get_Item(position), normal2));
                 else
                     refArr.Append(CreatePlaneByPoint(ptArr.get_Item(position), (curve.GeometryCurve as HermiteSpline).Tangents[position]));
@@ -260,10 +308,10 @@ namespace createdianlan
                     break;
                 }
             }
-            if(dir == Direction.left)
-                return trans.OfPoint((fcArr.get_Item(0) as PlanarFace).Origin);
 
-            return trans.OfPoint((fcArr.get_Item(0) as PlanarFace).Origin);
+            EdgeArray edArr = solid.Edges;
+            XYZ planeOrigin = (fcArr.get_Item(0) as PlanarFace).Origin;
+            return trans.OfPoint(new XYZ(planeOrigin.X,planeOrigin.Y+edArr.get_Item(0).ApproximateLength/2,planeOrigin.Z-edArr.get_Item(1).ApproximateLength/2));
         }
 
         //枚举类Direction
