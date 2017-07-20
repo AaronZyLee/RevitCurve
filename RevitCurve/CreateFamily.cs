@@ -84,6 +84,7 @@ namespace createdianlan
             return Result.Succeeded;
 
         }
+        
 
         public FamilySymbol getSymbolType(Document doc, string name)
         {
@@ -195,7 +196,7 @@ namespace createdianlan
             controlPoints2.Add(XoYprj_end); 
 
             Curve nbLine = NurbSpline.Create(controlPoints2, doubleArray);
-
+            
 
             //提取曲线上的拟合点，并在z轴方向插值拟合原曲线
             IList<XYZ> ptsOnCurve = nbLine.Tessellate();
@@ -205,8 +206,14 @@ namespace createdianlan
             for (int i = 0; i < ptCount; i++)
             {
                 XYZ pt = ptsOnCurve[i];
-                ReferencePoint p = m_familyCreator.NewReferencePoint(new XYZ(pt.X, pt.Y, startPoint.Z + i / (ptCount-1) * (endPoint.Z - startPoint.Z)));
-                ptArr.Append(p);
+                if(i<(ptCount-1)/8)
+                    ptArr.Append(m_familyCreator.NewReferencePoint(new XYZ(pt.X, pt.Y, startPoint.Z)));
+                else if(i>7*(ptCount-1)/8)
+                    ptArr.Append(m_familyCreator.NewReferencePoint(new XYZ(pt.X, pt.Y, endPoint.Z )));
+                else
+                    ptArr.Append(m_familyCreator.NewReferencePoint(new XYZ(pt.X, pt.Y, startPoint.Z + (i-(ptCount-1)/8) * (endPoint.Z - startPoint.Z) / (0.75*(ptCount - 1)))));
+                //ReferencePoint p = m_familyCreator.NewReferencePoint(new XYZ(pt.X, pt.Y, startPoint.Z + i*(endPoint.Z - startPoint.Z)/ (ptCount - 1)));
+                //ptArr.Append(p);
             }
 
             CurveByPoints curve = m_familyCreator.NewCurveByPoints(ptArr);
@@ -214,24 +221,31 @@ namespace createdianlan
             curve.Visible = false;
 
             //创建放样平面并加入参照数组中
-            int step = 8;//取8个点进行拟合
+            int step = 8;//取step个点进行拟合
             ReferenceArrayArray refArr = new ReferenceArrayArray();
             for (int i = 0; i <= step; i++)
             {
                 int position = i * (ptCount - 1) / step;
+                
+                
                 if (i == 0)
-                    refArr.Append(CreatePlaneByPoint(ptArr.get_Item(position), normal1));
+                    refArr.Append(CreatePlaneByPoint1(ptArr.get_Item(position), ptArr.get_Item((i + 1) * (ptCount - 1) / step), (curve.GeometryCurve as HermiteSpline).Tangents[position], (curve.GeometryCurve as HermiteSpline).Tangents[((i + 1) * (ptCount - 1) / step)]));
                 else if (i == step)
-                    refArr.Append(CreatePlaneByPoint(ptArr.get_Item(position), normal2));
+                    refArr.Append(CreatePlaneByPoint1(ptArr.get_Item(position), ptArr.get_Item((i - 1) * (ptCount - 1) / step), (curve.GeometryCurve as HermiteSpline).Tangents[position], (curve.GeometryCurve as HermiteSpline).Tangents[((i - 1) * (ptCount - 1) / step)]));
+                    //refArr.Append(CreatePlaneByPoint1(ptArr.get_Item(position), (curve.GeometryCurve as HermiteSpline).Tangents[position]));
                 else
+                
                     refArr.Append(CreatePlaneByPoint(ptArr.get_Item(position), (curve.GeometryCurve as HermiteSpline).Tangents[position]));
 
             }
 
             //创建放样实体
             m_familyCreator.NewLoftForm(true, refArr);
+            //m_familyCreator.NewFormByCap(true, refArr.get_Item(0));
+           
 
         }
+        
 
         //根据参照点和法向量创建放样截面
         private ReferenceArray CreatePlaneByPoint(ReferencePoint refPt, XYZ normal)
@@ -239,6 +253,20 @@ namespace createdianlan
             Plane plane = new Plane(normal, refPt.Position);
             Arc circle = Arc.Create(plane, mmToFeet(300), 0, 2 * Math.PI);
             ModelCurve modelcurve = m_familyCreator.NewModelCurve(circle, SketchPlane.Create(massdoc, plane));
+            ReferenceArray ra = new ReferenceArray();
+            ra.Append(modelcurve.GeometryCurve.Reference);
+            return ra;
+            
+        }
+
+        private ReferenceArray CreatePlaneByPoint1(ReferencePoint refPt, ReferencePoint refrefPt , XYZ normal, XYZ refnormal)
+        {
+            Plane refPlane = new Plane(refnormal, refrefPt.Position);
+            Plane plane = new Plane(normal, refPt.Position);
+            double sita = -(Math.PI - plane.XVec.AngleOnPlaneTo(refPlane.XVec, plane.Normal));
+            Plane planeEx = new Plane(plane.XVec * Math.Cos(sita) + plane.YVec * Math.Sin(sita), plane.YVec * Math.Cos(sita) - plane.XVec * Math.Sin(sita), plane.Origin);
+            Arc circle = Arc.Create(planeEx, mmToFeet(300), 0, 2 * Math.PI);
+            ModelCurve modelcurve = m_familyCreator.NewModelCurve(circle, SketchPlane.Create(massdoc, planeEx));
             ReferenceArray ra = new ReferenceArray();
             ra.Append(modelcurve.GeometryCurve.Reference);
             return ra;
