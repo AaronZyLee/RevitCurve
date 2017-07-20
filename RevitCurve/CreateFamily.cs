@@ -85,49 +85,6 @@ namespace createdianlan
 
         }
         
-
-        public FamilySymbol getSymbolType(Document doc, string name)
-        {
-            FilteredElementIdIterator workWellItrator = new FilteredElementCollector(doc).OfClass(typeof(Family)).GetElementIdIterator();
-            workWellItrator.Reset();
-            FamilySymbol getsymbol = null;
-            while (workWellItrator.MoveNext())
-            {
-                Family family = doc.GetElement(workWellItrator.Current) as Family;
-                foreach (ElementId id in family.GetFamilySymbolIds())
-                {
-                    FamilySymbol symbol = doc.GetElement(id) as FamilySymbol;
-                    if (symbol.Name == name)
-                    {
-                        getsymbol = symbol;
-                    }
-                }
-            }
-            return getsymbol;
-
-        }
-
-        public Material getMaterial(Document doc, string name)
-        {
-            FilteredElementCollector elementCollector = new FilteredElementCollector(doc).OfClass(typeof(Material));
-            IList<Element> materials = elementCollector.ToElements();
-            Material getsymbol = null;
-
-
-            foreach (Element elem in materials)
-            {
-                Material me = elem as Material;
-                if (me.Name.Contains(name))
-                {
-                    getsymbol = me;
-                    if (getsymbol != null)
-                        break;
-                }
-            }
-            return getsymbol;
-
-        }
-
         private void MakeNewCurve(FamilyInstance well1, FamilyInstance well2)
         {
             XYZ w1_left = LocatePointOnFamilyInstance(well1, Direction.left);
@@ -156,19 +113,8 @@ namespace createdianlan
                     break;
             }
 
-            //CreateCurve(LocatePointOnFamilyInstance(well1, Direction.right), LocatePointOnFamilyInstance(well2, Direction.left), well1.HandOrientation, -well2.HandOrientation);
         }
 
-        private int findMinDistance(IList<double> distances)
-        {
-            double min = distances[0];
-            for(int i=1;i<distances.Count;i++){
-                if (distances[i] < min)
-                    min = distances[i];
-                }
-            return distances.IndexOf(min);        
-
-        }
 
         #region Helper Function
 
@@ -227,27 +173,25 @@ namespace createdianlan
             {
                 int position = i * (ptCount - 1) / step;
                 
-                
+                //取起点截面及第二个截面作为参照平面
                 if (i == 0)
-                    refArr.Append(CreatePlaneByPoint1(ptArr.get_Item(position), ptArr.get_Item((i + 1) * (ptCount - 1) / step), (curve.GeometryCurve as HermiteSpline).Tangents[position], (curve.GeometryCurve as HermiteSpline).Tangents[((i + 1) * (ptCount - 1) / step)]));
+                    refArr.Append(CreatePlaneByPoint(ptArr.get_Item(position), ptArr.get_Item((i + 1) * (ptCount - 1) / step), (curve.GeometryCurve as HermiteSpline).Tangents[position], (curve.GeometryCurve as HermiteSpline).Tangents[((i + 1) * (ptCount - 1) / step)]));
+                //取终点截面及倒数第二个截面作为参照平面
                 else if (i == step)
-                    refArr.Append(CreatePlaneByPoint1(ptArr.get_Item(position), ptArr.get_Item((i - 1) * (ptCount - 1) / step), (curve.GeometryCurve as HermiteSpline).Tangents[position], (curve.GeometryCurve as HermiteSpline).Tangents[((i - 1) * (ptCount - 1) / step)]));
-                    //refArr.Append(CreatePlaneByPoint1(ptArr.get_Item(position), (curve.GeometryCurve as HermiteSpline).Tangents[position]));
+                    refArr.Append(CreatePlaneByPoint(ptArr.get_Item(position), ptArr.get_Item((i - 1) * (ptCount - 1) / step), (curve.GeometryCurve as HermiteSpline).Tangents[position], (curve.GeometryCurve as HermiteSpline).Tangents[((i - 1) * (ptCount - 1) / step)]));
                 else
-                
                     refArr.Append(CreatePlaneByPoint(ptArr.get_Item(position), (curve.GeometryCurve as HermiteSpline).Tangents[position]));
 
             }
 
             //创建放样实体
             m_familyCreator.NewLoftForm(true, refArr);
-            //m_familyCreator.NewFormByCap(true, refArr.get_Item(0));
            
 
         }
         
 
-        //根据参照点和法向量创建放样截面
+        //根据参照点和法向量创建放样截面，针对中间截面对象
         private ReferenceArray CreatePlaneByPoint(ReferencePoint refPt, XYZ normal)
         {
             Plane plane = new Plane(normal, refPt.Position);
@@ -259,16 +203,24 @@ namespace createdianlan
             
         }
 
-        private ReferenceArray CreatePlaneByPoint1(ReferencePoint refPt, ReferencePoint refrefPt , XYZ normal, XYZ refnormal)
+        //针对起点终点截面圆放样图形的建立，由于revit机制中圆的定位与平面坐标轴相关，需要对放样平面的坐标轴进行旋转
+        private ReferenceArray CreatePlaneByPoint(ReferencePoint refPt, ReferencePoint refrefPt , XYZ normal, XYZ refnormal)
         {
             Plane refPlane = new Plane(refnormal, refrefPt.Position);
             Plane plane = new Plane(normal, refPt.Position);
+
+            //取得参照平面坐标轴在所选平面的投影与所选平面坐标轴的夹角sita
             double sita = -(Math.PI - plane.XVec.AngleOnPlaneTo(refPlane.XVec, plane.Normal));
+
+            //求出新的坐标轴向量，并创建新平面planeEx
             Plane planeEx = new Plane(plane.XVec * Math.Cos(sita) + plane.YVec * Math.Sin(sita), plane.YVec * Math.Cos(sita) - plane.XVec * Math.Sin(sita), plane.Origin);
+
+            //绘制圆，创建模型线，并加入参照组中
             Arc circle = Arc.Create(planeEx, mmToFeet(300), 0, 2 * Math.PI);
             ModelCurve modelcurve = m_familyCreator.NewModelCurve(circle, SketchPlane.Create(massdoc, planeEx));
             ReferenceArray ra = new ReferenceArray();
             ra.Append(modelcurve.GeometryCurve.Reference);
+
             return ra;
         }
 
@@ -358,6 +310,60 @@ namespace createdianlan
         double mmToFeet(double mmVal)
         {
             return mmVal / 304.8;
+        }
+
+        public Material getMaterial(Document doc, string name)
+        {
+            FilteredElementCollector elementCollector = new FilteredElementCollector(doc).OfClass(typeof(Material));
+            IList<Element> materials = elementCollector.ToElements();
+            Material getsymbol = null;
+
+
+            foreach (Element elem in materials)
+            {
+                Material me = elem as Material;
+                if (me.Name.Contains(name))
+                {
+                    getsymbol = me;
+                    if (getsymbol != null)
+                        break;
+                }
+            }
+            return getsymbol;
+
+        }
+
+        public FamilySymbol getSymbolType(Document doc, string name)
+        {
+            FilteredElementIdIterator workWellItrator = new FilteredElementCollector(doc).OfClass(typeof(Family)).GetElementIdIterator();
+            workWellItrator.Reset();
+            FamilySymbol getsymbol = null;
+            while (workWellItrator.MoveNext())
+            {
+                Family family = doc.GetElement(workWellItrator.Current) as Family;
+                foreach (ElementId id in family.GetFamilySymbolIds())
+                {
+                    FamilySymbol symbol = doc.GetElement(id) as FamilySymbol;
+                    if (symbol.Name == name)
+                    {
+                        getsymbol = symbol;
+                    }
+                }
+            }
+            return getsymbol;
+
+        }
+
+        private int findMinDistance(IList<double> distances)
+        {
+            double min = distances[0];
+            for (int i = 1; i < distances.Count; i++)
+            {
+                if (distances[i] < min)
+                    min = distances[i];
+            }
+            return distances.IndexOf(min);
+
         }
 
         #endregion
